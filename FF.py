@@ -1,6 +1,73 @@
 import json
-import random
 from math import ceil
+import math
+
+
+def seeded_random(seed):
+    l_seed = seed if seed else 1337
+
+    def rd(min=0, max=2147483647):
+        nonlocal l_seed
+        random = math.sin(l_seed) * 10000
+        seed_decimal = random - math.floor(random)
+        l_seed = (math.floor(seed_decimal * 2147483647) * 25214903917 + 11) % 1000000001339
+        return math.floor(seed_decimal * (max - min + 1) + min)
+
+    return rd
+
+
+def robust_solition(K):
+    # 理想孤波分布
+    p_ideal = [0] * K
+    p_ideal[0] = 1 / K
+    for i in range(1, K):
+        p_ideal[i] = 1 / (i * (i + 1))
+
+    # 鲁棒孤波分布
+    c = 0.05  # 参数
+    delta = 0.05  # 保证译码成功概率为 1-delta
+    p_robust = p_ideal.copy()
+
+    R = c * math.log(K / delta) * math.sqrt(K)
+    print('预处理集期望大小', R)
+    degree_max = round(K / R)  # 度数上限
+    p = [0] * degree_max  # 度分布概率矩阵
+
+    for i in range(degree_max - 1):
+        p[i] = R / ((i + 1) * K)
+
+    p[degree_max - 1] = R * math.log(R / delta) / K
+
+    # 鲁棒孤波分布为p与p_ideal相加然后归一化
+    for i in range(degree_max):
+        p_robust[i] += p[i]
+
+    sum_p_robust = sum(p_robust)
+    p_robust = [x / sum_p_robust for x in p_robust]
+
+    # 找到最后一个大于 0.1/packet_num 的元素的索引 + 1
+    max_num = next(i for i in range(len(p_robust) - 1, -1, -1) if p_robust[i] > (0.1 / K)) + 1
+
+    distribution_matrix_prob = p_robust[:max_num]
+    temp_sum = sum(distribution_matrix_prob)
+    distribution_matrix_prob = [x * (1 / temp_sum) for x in distribution_matrix_prob]
+    temp_sum = 0
+    for i in range(max_num):
+        temp_sum += distribution_matrix_prob[i]
+        distribution_matrix_prob[i] = temp_sum
+
+    return distribution_matrix_prob
+
+
+def randChunkNums(k, prob, seed):
+    r = seeded_random(seed)
+    d = r(0, 2147483646) / 2147483647
+    d = next(i for i in range(len(prob)) if prob[i] >= d) + 1
+    k -= 1
+    res = {r(0, k) for i in range(d)}
+    while len(res) < d:
+        res.add(r(0, k))
+    return list(res)
 
 
 def charN(str, N):
@@ -14,20 +81,15 @@ def xor(str1, str2):
     return ''.join(chr(ord(charN(str1, i)) ^ ord(charN(str2, i))) for i in range(length))
 
 
-def randChunkNums(num_chunks):
-    size = random.randint(1, min(5, num_chunks))
-    return random.sample(range(num_chunks), size)
-
-
 class Droplet:
-    def __init__(self, data, seed, num_chunks):
+    def __init__(self, data, seed, num_chunks, prob):
         self.data = data
         self.seed = seed
         self.num_chunks = num_chunks
+        self.prob = prob
 
     def chunkNums(self):
-        random.seed(self.seed)
-        return randChunkNums(self.num_chunks)
+        return randChunkNums(self.num_chunks, self.prob, self.seed)
 
     def toString(self):
         return json.dumps(
@@ -44,11 +106,12 @@ class Fountain:
         self.chunk_size = chunk_size
         self.num_chunks = int(ceil(len(data) / float(chunk_size)))
         self.seed = seed
-        random.seed(seed)
+        self.r = seeded_random(seed)
+        self.prob = robust_solition(self.num_chunks)
 
     def droplet(self):
         self.updateSeed()
-        chunk_nums = randChunkNums(self.num_chunks)
+        chunk_nums = randChunkNums(self.num_chunks, self.prob, self.seed)
         data = None
         for num in chunk_nums:
             if data is None:
@@ -56,7 +119,7 @@ class Fountain:
             else:
                 data = xor(data, self.chunk(num))
 
-        return Droplet(data, self.seed, self.num_chunks)
+        return Droplet(data, self.seed, self.num_chunks, self.prob)
 
     def chunk(self, num):
         start = self.chunk_size * num
@@ -64,8 +127,7 @@ class Fountain:
         return self.data[start:end]
 
     def updateSeed(self):
-        self.seed = random.randint(0, 2 ** 31 - 1)
-        random.seed(self.seed)
+        self.seed = self.r()
 
 
 class Glass:
@@ -151,11 +213,13 @@ def glass(id):
 
     return ['glass.html',
             len(g.droplets),
+            id,
             message,
-            g.getString(),
-            id]
+            g.getString()]
+
 
 import time
+
 for _i in range(1000):
     fillAmt(_i, 512)
     print(glass(_i))
