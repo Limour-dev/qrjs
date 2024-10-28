@@ -2,8 +2,8 @@ function seededRandom(seed) {
     let lSeed = seed || 1337;
 
     return function rd(min=0, max=2147483647) {
-        const random = Math.sin(lSeed) * 10000;
-        const seedDecimal = random - Math.floor(random);
+        const random = Math.sin(lSeed) * 100;
+        const seedDecimal = (random - Math.floor(random)).toFixed(8);
         lSeed = (Math.floor(seedDecimal * 25214903917) + 11) % 2147483647;
         return Math.floor(seedDecimal * (max - min + 1) + min);
     }
@@ -63,7 +63,7 @@ function randChunkNums(k, prob, seed) {
     while (res.size < degree) {
         res.add(r(0, k));
     }
-    return Array.from(res);
+    return Array.from(res).sort((a, b) => a - b);
 }
 
 function xor(arr1, arr2) {
@@ -196,15 +196,19 @@ class Glass {
     }
 }
 
-let b = seededRandom()
+let b = seededRandom();
 for (let i = 0; i < 0; i++) {
     console.log(b());
 }
 
-for (let i = 0; i < 0; i++) {
+let y = seededRandom();
+for (let i = 49; i < 50; i++) {
     let a = robustSolition(2 + i);
-    console.log(a)
-    console.log(randChunkNums(2 + i, a, 1337));
+    console.log(a);
+    for (let j = 0; j < 500; j++) {
+        let tmp = y();
+        console.log(j, tmp, randChunkNums(2 + i, a, tmp));
+    }
 }
 
 // 创建一个简单的测试数据
@@ -222,7 +226,7 @@ console.log('解码后的数据:', Array.from(glass_1.getData()));
 // 创建一个Fountain实例
 const fountain = new Fountain(testData,4);
 
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < 0; i++) {
     // 创建一个Glass实例
     const glass = new Glass(fountain.numChunks,fountain.padding);
 
