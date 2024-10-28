@@ -1,6 +1,7 @@
 # qrjs
 ## 预览
 ![image](https://github.com/user-attachments/assets/b41effcc-df05-417e-9e25-e729e27e6429)
+![image](https://github.com/user-attachments/assets/d83730cb-487c-4ba8-8b8f-5ddffd38a4eb)
 
 ## 配置环境
 ```bash
