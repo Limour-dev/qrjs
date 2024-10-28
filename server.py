@@ -115,6 +115,10 @@ class Glass:
 
     def addDroplet(self, d):
         if self.num_chunks > 1:
+            for od in self.droplets:
+                if od.seed == d.seed:
+                    print('重复包，已忽略')
+                    return
             d.prob = self.prob
             self.droplets.append(d)
             entry = [d.chunkNums(), d.data]
@@ -180,3 +184,4 @@ finally:
 if g and g.isDone():
     with open('qr.dl', 'wb') as f:
         f.write(g.getData())
+        print('文件已保存至 qr.dl')
