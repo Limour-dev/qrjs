@@ -1,4 +1,8 @@
 # qrjs
+## 预览
+![image](https://github.com/user-attachments/assets/b41effcc-df05-417e-9e25-e729e27e6429)
+
+## 配置环境
 ```bash
 conda create -n qrjs conda-forge::opencv
 pip install pyzbar -i https://pypi.tuna.tsinghua.edu.cn/simple
