@@ -1,4 +1,3 @@
-import json
 from math import ceil
 import math
 
@@ -70,44 +69,32 @@ def randChunkNums(k, prob, seed):
     return list(res)
 
 
-def charN(str, N):
-    if N < len(str):
-        return str[N]
-    return 'X'
-
-
 def xor(str1, str2):
-    length = max(len(str1), len(str2))
-    return ''.join(chr(ord(charN(str1, i)) ^ ord(charN(str2, i))) for i in range(length))
+    return bytes(a ^ b for a, b in zip(str1, str2))
 
 
 class Droplet:
-    def __init__(self, data, seed, num_chunks, prob):
+    def __init__(self, data, seed, num_chunks, prob, padding):
         self.data = data
         self.seed = seed
         self.num_chunks = num_chunks
         self.prob = prob
+        self.padding = padding
 
     def chunkNums(self):
         return randChunkNums(self.num_chunks, self.prob, self.seed)
 
-    def toString(self):
-        return json.dumps(
-            {
-                'seed': self.seed,
-                'num_chunks': self.num_chunks,
-                'data': self.data
-            })
-
 
 class Fountain:
-    def __init__(self, data, chunk_size=32, seed=None):
+    def __init__(self, data: bytes, chunk_size=32, seed=None):
         self.data = data
         self.chunk_size = chunk_size
         self.num_chunks = int(ceil(len(data) / float(chunk_size)))
         self.seed = seed
         self.r = seeded_random(seed)
         self.prob = robust_solition(self.num_chunks)
+        self.padding = self.num_chunks * self.chunk_size - len(self.data)
+        self.data += b'\00' * self.padding
 
     def droplet(self):
         self.updateSeed()
@@ -119,11 +106,11 @@ class Fountain:
             else:
                 data = xor(data, self.chunk(num))
 
-        return Droplet(data, self.seed, self.num_chunks, self.prob)
+        return Droplet(data, self.seed, self.num_chunks, self.prob, self.padding)
 
     def chunk(self, num):
         start = self.chunk_size * num
-        end = min(self.chunk_size * (num + 1), len(self.data))
+        end = self.chunk_size * (num + 1)
         return self.data[start:end]
 
     def updateSeed(self):
@@ -131,11 +118,12 @@ class Fountain:
 
 
 class Glass:
-    def __init__(self, num_chunks):
+    def __init__(self, num_chunks, padding):
         self.entries = []
         self.droplets = []
         self.num_chunks = num_chunks
         self.chunks = [None] * num_chunks
+        self.padding = padding
 
     def addDroplet(self, d):
         self.droplets.append(d)
@@ -155,18 +143,17 @@ class Glass:
                 if entry[0][0] in d[0]:
                     self.updateEntry(d)
 
-    def getString(self):
-        return ''.join(x or ' _ ' for x in self.chunks)
+    def getData(self):
+        if self.isDone():
+            self.chunks[-1] = self.chunks[-1][:-self.padding]
+            return b''.join(self.chunks)
+        return b''
 
     def isDone(self):
         return None not in self.chunks
 
     def chunksDone(self):
-        count = 0
-        for c in self.chunks:
-            if c is not None:
-                count += 1
-        return count
+        return sum(1 for x in self.chunks if x is not None)
 
 
 m = """
@@ -183,7 +170,7 @@ With this algorithm implemented, I was able to examine its efficiency some. Expe
 However, fountain codes have the downside of transmitting files only in their entirety. If insufficient droplets are received, there is no guarantee that any continuous part of the file will be readable. Other methods exist for applications where it would be better to receive the file in continuous segments. For such applications, such as watching YouTube videos, streaming data is more applicable. The water analogues never seem to end.
 """.strip()
 
-f = Fountain(m)
+f = Fountain(m.encode('utf-8'))
 
 glasses = {}
 
@@ -192,7 +179,7 @@ def getGlass(id):
     id = int(id)
     g = None
     if id not in glasses:
-        g = Glass(f.num_chunks)
+        g = Glass(f.num_chunks, f.padding)
         glasses[id] = g
     return glasses[id]
 
@@ -215,7 +202,8 @@ def glass(id):
             len(g.droplets),
             id,
             message,
-            g.getString()]
+            g.padding,
+            g.getData().decode('utf-8')]
 
 
 import time
