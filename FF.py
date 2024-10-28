@@ -1,5 +1,6 @@
 from math import ceil
 import math
+import base64
 
 
 def seeded_random(seed):
@@ -74,15 +75,28 @@ def xor(str1, str2):
 
 
 class Droplet:
-    def __init__(self, data, seed, num_chunks, prob, padding):
+    def __init__(self, data, seed, num_chunks, padding):
         self.data = data
         self.seed = seed
         self.num_chunks = num_chunks
-        self.prob = prob
+        self.prob = None
         self.padding = padding
 
     def chunkNums(self):
         return randChunkNums(self.num_chunks, self.prob, self.seed)
+
+    def getStr(self):
+        data = base64.b64encode(self.data).decode()
+        return f'{self.seed}|{self.num_chunks}|{self.padding}|{data}'
+
+
+def str2Droplet(s: str):
+    args = s.split('|', maxsplit=3)
+    seed = int(args[0])
+    num_chunks = int(args[1])
+    padding = int(args[2])
+    data = base64.b64decode(args[3])
+    return Droplet(data, seed, num_chunks, padding)
 
 
 class Fountain:
@@ -98,15 +112,17 @@ class Fountain:
 
     def droplet(self):
         self.updateSeed()
-        chunk_nums = randChunkNums(self.num_chunks, self.prob, self.seed)
-        data = None
-        for num in chunk_nums:
-            if data is None:
-                data = self.chunk(num)
-            else:
-                data = xor(data, self.chunk(num))
-
-        return Droplet(data, self.seed, self.num_chunks, self.prob, self.padding)
+        if self.num_chunks > 1:
+            chunk_nums = randChunkNums(self.num_chunks, self.prob, self.seed)
+            data = None
+            for num in chunk_nums:
+                if data is None:
+                    data = self.chunk(num)
+                else:
+                    data = xor(data, self.chunk(num))
+        else:
+            data = self.data
+        return Droplet(data, self.seed, self.num_chunks, self.padding)
 
     def chunk(self, num):
         start = self.chunk_size * num
@@ -118,18 +134,24 @@ class Fountain:
 
 
 class Glass:
-    def __init__(self, num_chunks, padding):
+    def __init__(self, d: Droplet):
         self.entries = []
         self.droplets = []
-        self.num_chunks = num_chunks
-        self.chunks = [None] * num_chunks
-        self.padding = padding
+        self.num_chunks = d.num_chunks
+        self.chunks = [None] * self.num_chunks
+        self.prob = robust_solition(self.num_chunks)
+        self.padding = d.padding
+        self.addDroplet(d)
 
     def addDroplet(self, d):
-        self.droplets.append(d)
-        entry = [d.chunkNums(), d.data]
-        self.entries.append(entry)
-        self.updateEntry(entry)
+        if self.num_chunks > 1:
+            d.prob = self.prob
+            self.droplets.append(d)
+            entry = [d.chunkNums(), d.data]
+            self.entries.append(entry)
+            self.updateEntry(entry)
+        else:
+            self.chunks[0] = d.data
 
     def updateEntry(self, entry):
         for chunk_num in entry[0]:
@@ -165,11 +187,17 @@ for i in range(0):
     print(a)
     print(randChunkNums(2 + i, a, 1337))
 
-testData = bytes(range(1, 11))
-fountain = Fountain(testData, 4)
+testData = bytes(range(0, 256))
+fountain = Fountain(testData, 31)
 for _i in range(10):
-    g = Glass(fountain.num_chunks, fountain.padding)
+    ds = fountain.droplet().getStr()
+    d = str2Droplet(ds)
+    g = Glass(d)
+    print(_i, f'完成度: {g.chunksDone()}/{g.num_chunks}')
     while not g.isDone():
-        g.addDroplet(fountain.droplet())
+        ds = fountain.droplet().getStr()
+        print(ds)
+        d = str2Droplet(ds)
+        g.addDroplet(d)
         print(_i, f'完成度: {g.chunksDone()}/{g.num_chunks}')
     print('解码后的数据:', list(g.getData()))
