@@ -10,8 +10,8 @@ def seeded_random(seed):
 
     def rd(min=0, max=2147483647):
         nonlocal l_seed
-        random = math.sin(l_seed) * 10000
-        seed_decimal = random - math.floor(random)
+        random = math.sin(l_seed) * 100
+        seed_decimal = round(random - math.floor(random), 8)
         l_seed = (math.floor(seed_decimal * 25214903917) + 11) % 2147483647
         return math.floor(seed_decimal * (max - min + 1) + min)
 
@@ -69,7 +69,9 @@ def randChunkNums(k, prob, seed):
     res = set()
     while len(res) < d:
         res.add(r(0, k))
-    return list(res)
+    res = list(res)
+    res.sort()
+    return res
 
 
 def xor(str1, str2):
