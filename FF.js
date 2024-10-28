@@ -82,6 +82,12 @@ class Droplet {
     chunkNums() {
         return randChunkNums(this.numChunks, this.prob, this.seed);
     }
+    
+    getStr() {
+        const data = btoa(String.fromCharCode.apply(null, new Uint8Array(this.data)));
+        return `${this.seed}|${this.numChunks}|${this.padding}|${data}`;
+    }
+    
 }
 
 class Fountain {
@@ -102,14 +108,18 @@ class Fountain {
 
     droplet() {
         this.updateSeed();
-        const chunkNums = randChunkNums(this.numChunks, this.prob, this.seed);
-        let data = null;
-        for (const num of chunkNums) {
-            if (data === null) {
-                data = this.chunk(num);
-            } else {
-                data = xor(data, this.chunk(num));
+        if (this.numChunks > 1) {
+            const chunkNums = randChunkNums(this.numChunks, this.prob, this.seed);
+            var data = null;
+            for (const num of chunkNums) {
+                if (data === null) {
+                    data = this.chunk(num);
+                } else {
+                    data = xor(data, this.chunk(num));
+                }
             }
+        } else {
+            var data = this.data;
         }
         return new Droplet(data,this.seed,this.numChunks,this.prob,this.padding);
     }
@@ -135,10 +145,15 @@ class Glass {
     }
 
     addDroplet(d) {
-        this.droplets.push(d);
-        const entry = [d.chunkNums(), d.data];
-        this.entries.push(entry);
-        this.updateEntry(entry);
+        if (this.numChunks > 1) {
+            this.droplets.push(d);
+            const entry = [d.chunkNums(), d.data];
+            this.entries.push(entry);
+            this.updateEntry(entry);
+        } else {
+            this.chunks[0] = d.data;
+        }
+
     }
 
     updateEntry(entry) {
@@ -196,6 +211,15 @@ for (let i = 0; i < 0; i++) {
 const testData = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 // 创建一个Fountain实例
+const fountain_1 = new Fountain(testData,20);
+// 创建一个Glass实例
+const glass_1 = new Glass(fountain_1.numChunks,fountain_1.padding);
+glass_1.addDroplet(fountain_1.droplet());
+console.log(fountain_1.droplet().getStr());
+console.log(`完成度: ${glass_1.chunksDone()}/${glass_1.numChunks}`);
+console.log('解码后的数据:', Array.from(glass_1.getData()));
+
+// 创建一个Fountain实例
 const fountain = new Fountain(testData,4);
 
 for (let i = 0; i < 10; i++) {
@@ -206,6 +230,7 @@ for (let i = 0; i < 10; i++) {
     while (!glass.isDone()) {
         const droplet = fountain.droplet();
         glass.addDroplet(droplet);
+        console.log(droplet.getStr());
         console.log(i, `完成度: ${glass.chunksDone()}/${glass.numChunks}`);
     }
 
