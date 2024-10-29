@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>File Compressor</title>
+</head>
+<body>
+  <input type="file" id="fileInput" onchange="compressAndEncodeFile(event)">
+  <textarea id="output" rows="10" cols="50"></textarea>
+  <button onclick="copyToClipboard()">Copy to Clipboard</button>
+  
+  <script>
+    async function compressAndEncodeFile(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        return;
+      }
+      const reader = file.stream().pipeThrough(new CompressionStream('gzip'));
+      const chunks = [];
+      const readerStream = reader.getReader();
+      while (true) {
+        const { done, value } = await readerStream.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const compressedFile = new Blob(chunks, { type: 'application/gzip' });
+      const reader2 = new FileReader();
+      reader2.onload = function() {
+        const base64Data = reader2.result.slice(29);
+        document.getElementById('output').value = base64Data;
+      };
+      reader2.readAsDataURL(compressedFile);
+    }
+
+    function copyToClipboard() {
+      const output = document.getElementById('output');
+      output.select();
+      document.execCommand('copy');
+      alert('Copied to clipboard!');
+    }
+  </script>
+</body>
+</html>
