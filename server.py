@@ -152,7 +152,16 @@ class Glass:
         return sum(1 for x in self.chunks if x is not None)
 
 
-camera = cv2.VideoCapture(1)  # 0 表示前置
+s_c = input('''请输入摄像头号或视频地址:
+前置摄像头:\t\t0
+IP Webcam:\t\thttp://192.168.x.x:8080/video
+DroidCam:\t\thttp://192.168.x.x:4747/video\n''').strip()
+if s_c.isnumeric():
+    s_c = int(s_c)
+elif s_c.find('://') < 0:
+    s_c = f'http://{s_c}/video'
+
+camera = cv2.VideoCapture(s_c)  # 0 表示前置摄像头
 cv2.namedWindow('zbar', cv2.WINDOW_NORMAL)
 size = (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2, int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)) // 2)
 print(size, cv2.resizeWindow('zbar', size[0], size[1]))
@@ -174,7 +183,7 @@ try:
                 else:
                     g = Glass(d)
                 print(f'完成度: {g.chunksDone()}/{g.num_chunks}')
-        c = cv2.waitKey(500)  # ms
+        c = cv2.waitKey(10)  # ms
         if c == 27 or (g and g.isDone()):
             break
 finally:
