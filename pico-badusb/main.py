@@ -5,7 +5,10 @@ class MyCommand(Command):
         with open(path, "r", encoding="utf-8") as payload:
             for string in payload:
                 self.__string = string.rstrip('\n\r')
-                self.__arguments = self.__string.split(" ")
+                if self.__string.startswith('STRING'):
+                    self.__arguments = ['STRING']
+                else:
+                    self.__arguments = self.__string.split(" ")
                 if len(self.__arguments) > 0:
                     command = self.__arguments.pop(0).lower()
                     
