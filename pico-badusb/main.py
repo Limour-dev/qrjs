@@ -1,9 +1,11 @@
 from badusb.command import Command
+import storage
 
 class MyCommand(Command):
     def myexecute(self, path: str) -> None:
         with open(path, "r", encoding="utf-8") as f:
             payload = f.readlines()
+        storage.umount('/')
         for string in payload:
             self.__string = string.rstrip('\n\r')
             if self.__string.startswith('STRING'):
