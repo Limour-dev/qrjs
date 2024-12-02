@@ -164,7 +164,6 @@ class VideoCapture:
         # "camera_id" is a int type id or string name
         self.cap = cv2.VideoCapture(camera_id)
         self.q = queue.Queue(maxsize=2)
-        self.stop_threads = False  # to gracefully close sub-thread
         th = threading.Thread(target=self._reader, daemon=True)
         th.start()
 
@@ -174,7 +173,7 @@ class VideoCapture:
             _ret, _frame = self.cap.read()
             if not _ret:
                 break
-            if not self.q.empty():
+            if self.q.full():
                 try:
                     self.q.get_nowait()
                 except queue.Empty:
@@ -200,6 +199,8 @@ if not s_c:
     with open('cfg.cache', 'r', encoding='utf-8') as f:
         s_c = f.read().strip()
     print('读取缓存的配置：', s_c)
+    if s_c.isnumeric():
+        s_c = int(s_c)
 else:
     if s_c.isnumeric():
         s_c = int(s_c)
@@ -208,7 +209,7 @@ else:
             s_c += ':8080'
         s_c = f'http://{s_c}/video'
     with open('cfg.cache', 'w', encoding='utf-8') as f:
-        f.write(s_c)
+        f.write(str(s_c))
 
 camera = VideoCapture(s_c)  # 0 表示前置摄像头
 cv2.namedWindow('zbar', cv2.WINDOW_NORMAL)
