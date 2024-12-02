@@ -152,16 +152,65 @@ class Glass:
         return sum(1 for x in self.chunks if x is not None)
 
 
+import queue
+import threading
+
+
+# 自定义无缓存读视频类
+class VideoCapture:
+    """Customized VideoCapture, always read latest frame """
+
+    def __init__(self, camera_id):
+        # "camera_id" is a int type id or string name
+        self.cap = cv2.VideoCapture(camera_id)
+        self.q = queue.Queue(maxsize=2)
+        self.stop_threads = False  # to gracefully close sub-thread
+        th = threading.Thread(target=self._reader, daemon=True)
+        th.start()
+
+    # 实时读帧，只保存最后一帧
+    def _reader(self):
+        while True:
+            _ret, _frame = self.cap.read()
+            if not _ret:
+                break
+            if not self.q.empty():
+                try:
+                    self.q.get_nowait()
+                except queue.Empty:
+                    pass
+            self.q.put(_frame)
+
+    def read(self):
+        return self.q.get()
+
+    def get(self, prop_id):
+        return self.cap.get(prop_id)
+
+    def release(self):
+        self.cap.release()
+
+
 s_c = input('''请输入摄像头号或视频地址:
 前置摄像头:\t\t0
 IP Webcam:\t\thttp://192.168.x.x:8080/video
 DroidCam:\t\thttp://192.168.x.x:4747/video\n''').strip()
-if s_c.isnumeric():
-    s_c = int(s_c)
-elif s_c.find('://') < 0:
-    s_c = f'http://{s_c}/video'
 
-camera = cv2.VideoCapture(s_c)  # 0 表示前置摄像头
+if not s_c:
+    with open('cfg.cache', 'r', encoding='utf-8') as f:
+        s_c = f.read().strip()
+    print('读取缓存的配置：', s_c)
+else:
+    if s_c.isnumeric():
+        s_c = int(s_c)
+    elif s_c.find('://') < 0:
+        if s_c.find(':') < 0:
+            s_c += ':8080'
+        s_c = f'http://{s_c}/video'
+    with open('cfg.cache', 'w', encoding='utf-8') as f:
+        f.write(s_c)
+
+camera = VideoCapture(s_c)  # 0 表示前置摄像头
 cv2.namedWindow('zbar', cv2.WINDOW_NORMAL)
 size = (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2, int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)) // 2)
 print(size, cv2.resizeWindow('zbar', size[0], size[1]))
@@ -169,7 +218,8 @@ print(size, cv2.resizeWindow('zbar', size[0], size[1]))
 g = None
 try:
     while True:
-        ret, frame = camera.read()
+        camera.read()  # 丢弃一帧以刷新缓存
+        frame = camera.read()
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         cv2.imshow('zbar', gray)
         barcodes = pyzbar.decode(gray)
@@ -183,7 +233,7 @@ try:
                 else:
                     g = Glass(d)
                 print(f'完成度: {g.chunksDone()}/{g.num_chunks}')
-        c = cv2.waitKey(10)  # ms
+        c = cv2.waitKey(100)  # ms
         if c == 27 or (g and g.isDone()):
             break
 finally:
