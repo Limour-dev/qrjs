@@ -218,11 +218,14 @@ print(size, cv2.resizeWindow('zbar', size[0], size[1]))
 g = None
 try:
     while True:
-        camera.read()  # 丢弃一帧以刷新缓存
         frame = camera.read()
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         cv2.imshow('zbar', gray)
-        barcodes = pyzbar.decode(gray)
+        try:
+            barcodes = pyzbar.decode(gray)
+        except Exception as e:
+            print(e)
+            continue
         if barcodes:
             for barcode in barcodes:
                 data = barcode.data.decode('utf-8')
@@ -233,7 +236,7 @@ try:
                 else:
                     g = Glass(d)
                 print(f'完成度: {g.chunksDone()}/{g.num_chunks}')
-        c = cv2.waitKey(100)  # ms
+        c = cv2.waitKey(300)  # ms
         if c == 27 or (g and g.isDone()):
             break
 finally:
