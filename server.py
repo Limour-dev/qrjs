@@ -1,5 +1,17 @@
 import cv2
-import pyzbar.pyzbar as pyzbar
+
+try:
+    import pyzbar.pyzbar as pyzbar
+    def qrdecode(_img):
+        return [x.data.decode('utf-8') for x in pyzbar.decode(_img)]
+    print('将使用 pyzbar 解码二维码')
+except ModuleNotFoundError:
+    qrDecoder = cv2.QRCodeDetector()
+    def qrdecode(_img):
+        _data, bbox, rect = qrDecoder.detectAndDecode(_img)
+        if _data:
+            return [_data]
+    print('将使用 opencv 解码二维码')
 
 import math
 import base64
@@ -169,16 +181,19 @@ class VideoCapture:
 
     # 实时读帧，只保存最后一帧
     def _reader(self):
-        while True:
-            _ret, _frame = self.cap.read()
-            if not _ret:
-                break
-            if self.q.full():
-                try:
-                    self.q.get_nowait()
-                except queue.Empty:
-                    pass
-            self.q.put(_frame)
+        try:
+            while True:
+                _ret, _frame = self.cap.read()
+                if not _ret:
+                    break
+                if self.q.full():
+                    try:
+                        self.q.get_nowait()
+                    except queue.Empty:
+                        pass
+                self.q.put(_frame)
+        except cv2.error as e:
+            print('相机关闭', e)
 
     def read(self):
         return self.q.get()
@@ -223,28 +238,27 @@ try:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         cv2.imshow('zbar', gray)
         try:
-            barcodes = pyzbar.decode(gray)
+            barcodes = qrdecode(gray)
         except Exception as e:
             print(e)
             continue
         if barcodes:
             for barcode in barcodes:
-                data = barcode.data.decode('utf-8')
-                print(data)
-                d = str2Droplet(data)
+                print(barcode)
+                d = str2Droplet(barcode)
                 if g:
                     g.addDroplet(d)
                 else:
                     g = Glass(d)
-                print(f'完成度: {g.chunksDone()}/{g.num_chunks}')
+                print(f'已收到 {len(g.droplets)} 个包; 译码进度: {g.chunksDone()}/{g.num_chunks}')
         c = cv2.waitKey(300)  # ms
-        if c == 27 or (g and g.isDone()):
+        if c == 27:
+            break
+        if g and g.isDone():
+            with open('qr.dl', 'wb') as f:
+                f.write(g.getData())
+                print('文件已保存至 qr.dl')
             break
 finally:
-    camera.release()
     cv2.destroyAllWindows()
-
-if g and g.isDone():
-    with open('qr.dl', 'wb') as f:
-        f.write(g.getData())
-        print('文件已保存至 qr.dl')
+    camera.release()
