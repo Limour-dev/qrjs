@@ -41,7 +41,10 @@ body {
 <body>
     <div class="app">
         <div class="bg"><img src="https://img.limour.top/2024/12/04/674fef77a1eb3.webp" alt=""></div>
-<a id="githubLink" href="https://hexo.limour.top/internal-network-uses-p4wnp1-to-transfer-file">View documentation v0.3</a>
+<a id="githubLink" href="https://hexo.limour.top/internal-network-uses-p4wnp1-to-transfer-file">View documentation v0.4</a>
+<br>
+<span>保存文件名：</span><textarea id="filename" rows="1" cols="50">qr.dl.txt</textarea>
+<hr>
 <div id="loadingMessage">🎥 Unable to access video stream (please make sure you have a webcam enabled)</div>
 <canvas id="canvas" hidden></canvas>
 <div id="output" hidden>
@@ -364,6 +367,16 @@ function tick() {
 		g.addDroplet(d);
 	  } else {
 		g = new Glass(d);
+	  }
+	  if (g.isDone()) {
+		outputData.innerText = '译码完成！';
+		const urlObject = window.URL || window.webkitURL || window;
+		const save_link = document.createElement('a');
+		const blob = new Blob([g.getData()], { type: 'application/octet-stream' }); // 创建 Blob 对象
+		save_link.href = urlObject.createObjectURL(blob);
+		save_link.download = document.querySelector("#filename").value;
+		save_link.click();
+		return;
 	  }
 	  outputData.innerText = `已收到 ${g.droplets.length} 个包; 译码进度: ${g.chunksDone()}/${g.numChunks}`;
 	} else {
