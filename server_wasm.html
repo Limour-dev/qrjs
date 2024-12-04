@@ -303,6 +303,10 @@ class Glass {
     }
 }
 
+var limour = prompt('请输入保存的文件名', 'qr.dl.txt');
+if (limour){
+  document.querySelector("#filename").value = limour;
+}
 var video = document.createElement("video");
 var canvasElement = document.getElementById("canvas");
 var canvas = canvasElement.getContext("2d");
