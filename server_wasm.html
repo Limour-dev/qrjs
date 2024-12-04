@@ -81,6 +81,9 @@ body {
 	</script>
 <script src="https://jscdn.limour.top/npm/@undecaf/zbar-wasm@0.11.0/dist/index.js"></script>
 <script>
+if (IsWeixinOrAlipay() == 13) {
+	throw SyntaxError('不要微信！');
+}
 function seededRandom(seed) {
     let lSeed = seed || 1337;
 
