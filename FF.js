@@ -7,7 +7,6 @@ function seededRandom(seed) {
         lSeed = (Math.floor(seedDecimal * 25214903917) + 11) % 2147483647;
         return Math.floor(seedDecimal * (max - min + 1) + min);
     }
-    ;
 }
 
 function robustSolition(K) {
@@ -25,7 +24,7 @@ function robustSolition(K) {
 
     const R = c * Math.log(K / delta) * Math.sqrt(K);
     const degreeMax = Math.min(Math.max(Math.round(K / R), 2), K);
-    console.log('预处理集期望大小', R, '度数上限', degreeMax);
+    // console.log('预处理集期望大小', R, '度数上限', degreeMax);
     const p = new Array(degreeMax).fill(0);
 
     for (let i = 0; i < degreeMax - 1; i++) {
@@ -63,7 +62,7 @@ function randChunkNums(k, prob, seed) {
     while (res.size < degree) {
         res.add(r(0, k));
     }
-    return Array.from(res).sort((a, b) => a - b);
+    return Array.from(res).sort( (a, b) => a - b);
 }
 
 function xor(arr1, arr2) {
@@ -71,23 +70,39 @@ function xor(arr1, arr2) {
 }
 
 class Droplet {
-    constructor(data, seed, numChunks, prob, padding) {
+    constructor(data, seed, numChunks, padding) {
         this.data = data;
         this.seed = seed;
         this.numChunks = numChunks;
-        this.prob = prob;
         this.padding = padding;
     }
 
     chunkNums() {
         return randChunkNums(this.numChunks, this.prob, this.seed);
     }
-    
+
     getStr() {
         const data = btoa(String.fromCharCode.apply(null, new Uint8Array(this.data)));
         return `${this.seed}|${this.numChunks}|${this.padding}|${data}`;
     }
-    
+
+}
+
+function str2Droplet(s) {
+    // 使用split分割字符串，不限制分割次数
+    let args = s.split('|');
+    let seed = parseInt(args[0], 10);
+    let num_chunks = parseInt(args[1], 10);
+    let padding = parseInt(args[2], 10);
+    // 将第四个及之后的所有部分合并到一起
+    let data = args.slice(3).join('|');
+    // 使用atob解码base64字符串，并将其转换为Uint8Array
+    let decodedData = atob(data);
+    let dataArray = new Uint8Array(decodedData.length);
+    for (let i = 0; i < decodedData.length; i++) {
+        dataArray[i] = decodedData.charCodeAt(i);
+    }
+    return new Droplet(dataArray, seed, num_chunks, padding);
 }
 
 class Fountain {
@@ -121,7 +136,7 @@ class Fountain {
         } else {
             var data = this.data;
         }
-        return new Droplet(data,this.seed,this.numChunks,this.prob,this.padding);
+        return new Droplet(data,this.seed,this.numChunks,this.padding);
     }
 
     chunk(num) {
@@ -136,16 +151,19 @@ class Fountain {
 }
 
 class Glass {
-    constructor(numChunks, padding) {
+    constructor(d) {
         this.entries = [];
         this.droplets = [];
-        this.numChunks = numChunks;
-        this.chunks = new Array(numChunks).fill(null);
-        this.padding = padding;
+        this.numChunks = d.numChunks;
+        this.chunks = new Array(this.numChunks).fill(null);
+        this.prob = robustSolition(this.numChunks);
+        this.padding = d.padding;
+        this.addDroplet(d);
     }
 
     addDroplet(d) {
         if (this.numChunks > 1) {
+            d.prob = this.prob;
             this.droplets.push(d);
             const entry = [d.chunkNums(), d.data];
             this.entries.push(entry);
@@ -215,25 +233,16 @@ for (let i = 49; i < 50; i++) {
 const testData = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 // 创建一个Fountain实例
-const fountain_1 = new Fountain(testData,20);
-// 创建一个Glass实例
-const glass_1 = new Glass(fountain_1.numChunks,fountain_1.padding);
-glass_1.addDroplet(fountain_1.droplet());
-console.log(fountain_1.droplet().getStr());
-console.log(`完成度: ${glass_1.chunksDone()}/${glass_1.numChunks}`);
-console.log('解码后的数据:', Array.from(glass_1.getData()));
-
-// 创建一个Fountain实例
 const fountain = new Fountain(testData,4);
 
-for (let i = 0; i < 0; i++) {
+for (let i = 0; i < 10; i++) {
     // 创建一个Glass实例
-    const glass = new Glass(fountain.numChunks,fountain.padding);
+    const glass = new Glass(str2Droplet(fountain.droplet().getStr()));
 
     // 生成和接收droplets直到解码完成
     while (!glass.isDone()) {
         const droplet = fountain.droplet();
-        glass.addDroplet(droplet);
+        glass.addDroplet(str2Droplet(droplet.getStr()));
         console.log(droplet.getStr());
         console.log(i, `完成度: ${glass.chunksDone()}/${glass.numChunks}`);
     }
