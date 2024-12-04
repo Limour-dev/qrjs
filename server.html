@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no">
+    <title>qrjs by limour</title>
+</head>
+<style>
+* {
+	padding: 0;
+	margin: 0;
+}
+
+body {
+	width: 100%;
+	height: 100%;
+	background: #FFFFFF;
+}
+
+.bg {
+	display: none;
+	position: fixed;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10;
+	background: rgba(0, 0, 0, 0.9);
+	text-align: end;
+	overflow: hidden;
+	padding: 1rem 5px 0 1rem;
+}
+
+.bg img {
+	width: 93%;
+	height: auto;
+}
+</style>
+
+<body>
+    <div class="app">
+        <div class="bg"><img src="https://img.limour.top/2024/12/04/674fef77a1eb3.webp" alt=""></div>
+<a id="githubLink" href="https://hexo.limour.top/internal-network-uses-p4wnp1-to-transfer-file">View documentation v0.2</a>
+<div id="loadingMessage">🎥 Unable to access video stream (please make sure you have a webcam enabled)</div>
+<canvas id="canvas" hidden></canvas>
+<div id="output" hidden>
+<div id="outputMessage">No QR code detected.</div>
+<div hidden><b>Data:</b> <span id="outputData"></span></div>
+</div>
+
+    </div>
+	<script>
+		window.onload = function() {
+			if (IsWeixinOrAlipay() == 13) {
+				var bgElements = document.querySelectorAll(".bg");
+				bgElements.forEach(function(element) {
+					element.style.display = 'block';
+				});
+			} else {
+				console.log(IsWeixinOrAlipay());
+			}
+		}
+
+		function IsWeixinOrAlipay() {
+			var ua = window.navigator.userAgent.toLowerCase();
+			// 判断是不是微信
+			if (ua.match(/micromessenger/i) == 'micromessenger') {
+				return 13;
+			}
+			// 判断是不是支付宝
+			if (ua.match(/alipayclient/i) == 'alipayclient') {
+				return 12;
+			}
+			// 哪个都不是
+			return 0;
+		}
+	</script>
+<script src="https://jscdn.limour.top/gh/Limour-dev/qrjs@main/qr-scanner/jsQR.js"></script>
+<script>
+var video = document.createElement("video");
+var canvasElement = document.getElementById("canvas");
+var canvas = canvasElement.getContext("2d");
+var loadingMessage = document.getElementById("loadingMessage");
+var outputContainer = document.getElementById("output");
+var outputMessage = document.getElementById("outputMessage");
+var outputData = document.getElementById("outputData");
+
+function drawLine(begin, end, color) {
+  canvas.beginPath();
+  canvas.moveTo(begin.x, begin.y);
+  canvas.lineTo(end.x, end.y);
+  canvas.lineWidth = 4;
+  canvas.strokeStyle = color;
+  canvas.stroke();
+}
+
+video.hidden = true
+video.height = 512;
+video.width = 512;
+// Use facingMode: environment to attemt to get the front camera on phones
+navigator.mediaDevices.getUserMedia({ video: { 
+	facingMode: "environment",
+	focusMode: "continuous", // 持续自动对焦
+    exposureMode: "continuous", // 持续自动曝光
+	width: { ideal: 512 },
+	height: { ideal: 512 },
+	frameRate: { ideal: 12 },
+} }).then(function(stream) {
+  video.srcObject = stream;
+  video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
+  video.play();
+  requestAnimationFrame(tick);
+});
+
+function tick() {
+  loadingMessage.innerText = "⌛ Loading video..."
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+	loadingMessage.hidden = true;
+	canvasElement.hidden = false;
+	outputContainer.hidden = false;
+
+	canvasElement.height = video.videoHeight;
+	canvasElement.width = video.videoWidth;
+	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+
+	var code = jsQR(imageData.data, imageData.width, imageData.height, {
+	  inversionAttempts: "dontInvert",
+	});
+	if (code) {
+	  drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+	  drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+	  drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+	  drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+	  outputMessage.hidden = true;
+	  outputData.parentElement.hidden = false;
+	  outputData.innerText = code.data;
+	} else {
+	  outputMessage.hidden = false;
+	  outputData.parentElement.hidden = true;
+	}
+  }
+  requestAnimationFrame(tick);
+}
+</script>
+</body>
+
+</html>
