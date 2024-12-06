@@ -373,8 +373,9 @@ class CoroutineLock {
 const lock = new CoroutineLock();
 
 var g;
-
-function tick() {
+var prevTimestamp;
+function tick(timestamp) {
+  requestAnimationFrame(tick);
   loadingMessage.innerText = "⌛ Loading video..."
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
 	loadingMessage.hidden = true;
@@ -384,6 +385,17 @@ function tick() {
 	canvasElement.height = video.videoHeight;
 	canvasElement.width = video.videoWidth;
 	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+	
+	if (!prevTimestamp) prevTimestamp = timestamp;
+	const delta = timestamp - prevTimestamp;
+	
+	if(delta < 500){
+	  return delta;
+	}
+	
+	prevTimestamp = timestamp;
+	// console.log(delta);
+	
 	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
 
 	zbarWasm.scanImageData(imageData).then(async (symbols) => {
@@ -421,7 +433,6 @@ function tick() {
 	    }
 	});
   }
-  requestAnimationFrame(tick);
 }
 </script>
 </body>
