@@ -339,99 +339,71 @@ navigator.mediaDevices.getUserMedia({ video: {
 	height: { ideal: 512 },
 	frameRate: { ideal: 6 },
 } }).then(function(stream) {
-  video.srcObject = stream;
-  video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
-  video.play();
-  requestAnimationFrame(tick);
-});
-
-class CoroutineLock {
-  constructor() {
-    this.locked = false;
-    this.queue = [];
-  }
-
-  async acquire() {
-    if (this.locked) {
-      return new Promise((resolve) => {
-        this.queue.push(resolve);
-      });
-    }
-    this.locked = true;
-  }
-
-  release() {
-    if (this.queue.length > 0) {
-      const next = this.queue.shift();
-      next();
-    } else {
-      this.locked = false;
-    }
-  }
-}
-
-const lock = new CoroutineLock();
-
-var g;
-var prevTimestamp;
-function tick(timestamp) {
-  requestAnimationFrame(tick);
-  loadingMessage.innerText = "⌛ Loading video..."
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+	video.srcObject = stream;
+	video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
+	video.play();
+	loadingMessage.innerText = "⌛ Loading video..."
 	loadingMessage.hidden = true;
 	canvasElement.hidden = false;
 	outputContainer.hidden = false;
+	canvasElement.height = 512;
+	canvasElement.width = 512;
+	requestAnimationFrame(tick);
+});
 
-	canvasElement.height = video.videoHeight;
-	canvasElement.width = video.videoWidth;
-	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-	
-	if (!prevTimestamp) prevTimestamp = timestamp;
+var g;
+async function p_g(symbols) {
+try {
+	for (const s of symbols) {
+	  s.rawData = s.decode()
+	  outputData.parentElement.hidden = false;
+	  outputMessage.innerText = s.rawData.substring(0, 50);
+	  var d = str2Droplet(s.rawData);
+	  if (g) {
+		if (!g.isDone()) {
+			g.addDroplet(d);
+		}else{
+			break;
+		}
+	  } else {
+		g = new Glass(d);
+	  }
+	  if (g.isDone()) {
+		outputData.innerText = '译码完成！';
+		const urlObject = window.URL || window.webkitURL || window;
+		const save_link = document.createElement('a');
+		const blob = new Blob([g.getData()], { type: 'application/octet-stream' }); // 创建 Blob 对象
+		save_link.href = urlObject.createObjectURL(blob);
+		save_link.download = document.querySelector("#filename").value;
+		save_link.click();
+		break;
+	  }
+	  outputData.innerText = `已收到 ${g.droplets.length} 个包; 译码进度: ${g.chunksDone()}/${g.numChunks}`;
+	};
+} catch (error) {
+	console.log(error);
+}
+}
+
+var prevTimestamp;
+function tick(timestamp) {
+  setTimeout(()=>{requestAnimationFrame(tick);}, 200);
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+  	if (!prevTimestamp) prevTimestamp = timestamp;
 	const delta = timestamp - prevTimestamp;
 	
-	if(delta < 500){
+	if(delta < 200){
 	  return delta;
 	}
-	
 	prevTimestamp = timestamp;
-	// console.log(delta);
-	
-	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
 
-	zbarWasm.scanImageData(imageData).then(async (symbols) => {
-		// 处理 symbols
-		await lock.acquire();
-		try {
-			for (const s of symbols) {
-				  s.rawData = s.decode()
-				  outputData.parentElement.hidden = false;
-				  outputMessage.innerText = s.rawData.substring(0, 50);
-				  var d = str2Droplet(s.rawData);
-				  if (g) {
-					if (!g.isDone()) {
-						g.addDroplet(d);
-					}else{
-						break;
-					}
-				  } else {
-					g = new Glass(d);
-				  }
-				  if (g.isDone()) {
-					outputData.innerText = '译码完成！';
-					const urlObject = window.URL || window.webkitURL || window;
-					const save_link = document.createElement('a');
-					const blob = new Blob([g.getData()], { type: 'application/octet-stream' }); // 创建 Blob 对象
-					save_link.href = urlObject.createObjectURL(blob);
-					save_link.download = document.querySelector("#filename").value;
-					save_link.click();
-					break;
-				  }
-				  outputData.innerText = `已收到 ${g.droplets.length} 个包; 译码进度: ${g.chunksDone()}/${g.numChunks}`;
-			};
-		} finally {
-		  lock.release();
-	    }
-	});
+	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+	try {
+		zbarWasm.scanImageData(imageData).then(p_g);
+	} catch (error) {
+		console.log(error);
+	}
   }
 }
 </script>
