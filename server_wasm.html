@@ -386,6 +386,18 @@ try {
 }
 
 var prevTimestamp;
+
+async function fzbar(){
+	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+	try {
+		symbols = await zbarWasm.scanImageData(imageData);
+		p_g(symbols);
+	} catch (error) {
+		console.log(error);
+	}
+}
+
 function tick(timestamp) {
   setTimeout(()=>{requestAnimationFrame(tick);}, 200);
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -396,14 +408,7 @@ function tick(timestamp) {
 	  return delta;
 	}
 	prevTimestamp = timestamp;
-
-	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-	try {
-		zbarWasm.scanImageData(imageData).then(p_g);
-	} catch (error) {
-		console.log(error);
-	}
+	fzbar();
   }
 }
 </script>
