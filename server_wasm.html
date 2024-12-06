@@ -305,112 +305,133 @@ class Glass {
         return this.chunks.filter(x => x !== null).length;
     }
 }
-
 var limour = prompt('请输入保存的文件名', 'qr.dl.txt');
-if (limour){
-  document.querySelector("#filename").value = limour;
+if (limour) {
+    document.querySelector("#filename").value = limour;
 }
 var video = document.createElement("video");
 var canvasElement = document.getElementById("canvas");
-var canvas = canvasElement.getContext("2d");
+var canvas = canvasElement.getContext("2d", {
+    willReadFrequently: true
+});
 var loadingMessage = document.getElementById("loadingMessage");
 var outputContainer = document.getElementById("output");
 var outputMessage = document.getElementById("outputMessage");
 var outputData = document.getElementById("outputData");
 
 function drawLine(begin, end, color) {
-  canvas.beginPath();
-  canvas.moveTo(begin.x, begin.y);
-  canvas.lineTo(end.x, end.y);
-  canvas.lineWidth = 4;
-  canvas.strokeStyle = color;
-  canvas.stroke();
+    canvas.beginPath();
+    canvas.moveTo(begin.x, begin.y);
+    canvas.lineTo(end.x, end.y);
+    canvas.lineWidth = 4;
+    canvas.strokeStyle = color;
+    canvas.stroke();
 }
 
 video.hidden = true
 video.height = 512;
 video.width = 512;
 // Use facingMode: environment to attemt to get the front camera on phones
-navigator.mediaDevices.getUserMedia({ video: { 
-	facingMode: "environment",
-	focusMode: "continuous", // 持续自动对焦
-    exposureMode: "continuous", // 持续自动曝光
-	width: { ideal: 512 },
-	height: { ideal: 512 },
-	frameRate: { ideal: 6 },
-} }).then(function(stream) {
-	video.srcObject = stream;
-	video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
-	video.play();
-	loadingMessage.innerText = "⌛ Loading video..."
-	loadingMessage.hidden = true;
-	canvasElement.hidden = false;
-	outputContainer.hidden = false;
-	canvasElement.height = 512;
-	canvasElement.width = 512;
-	requestAnimationFrame(tick);
+navigator.mediaDevices.getUserMedia({
+    video: {
+        facingMode: "environment",
+        focusMode: "continuous",
+        // 持续自动对焦
+        exposureMode: "continuous",
+        // 持续自动曝光
+        width: {
+            ideal: 512
+        },
+        height: {
+            ideal: 512
+        },
+        frameRate: {
+            ideal: 6
+        },
+    }
+}).then(function(stream) {
+    video.srcObject = stream;
+    video.setAttribute("playsinline", true);
+    // required to tell iOS safari we don't want fullscreen
+    video.play();
+    loadingMessage.innerText = "⌛ Loading video..."
+    loadingMessage.hidden = true;
+    canvasElement.hidden = false;
+    outputContainer.hidden = false;
+    canvasElement.height = 512;
+    canvasElement.width = 512;
+    requestAnimationFrame(tick);
 });
 
 var g;
 async function p_g(symbols) {
-try {
-	for (const s of symbols) {
-	  s.rawData = s.decode()
-	  outputData.parentElement.hidden = false;
-	  outputMessage.innerText = s.rawData.substring(0, 50);
-	  var d = str2Droplet(s.rawData);
-	  if (g) {
-		if (!g.isDone()) {
-			g.addDroplet(d);
-		}else{
-			break;
-		}
-	  } else {
-		g = new Glass(d);
-	  }
-	  if (g.isDone()) {
-		outputData.innerText = '译码完成！';
-		const urlObject = window.URL || window.webkitURL || window;
-		const save_link = document.createElement('a');
-		const blob = new Blob([g.getData()], { type: 'application/octet-stream' }); // 创建 Blob 对象
-		save_link.href = urlObject.createObjectURL(blob);
-		save_link.download = document.querySelector("#filename").value;
-		save_link.click();
-		break;
-	  }
-	  outputData.innerText = `已收到 ${g.droplets.length} 个包; 译码进度: ${g.chunksDone()}/${g.numChunks}`;
-	};
-} catch (error) {
-	console.log(error);
-}
+    try {
+        for (const s of symbols) {
+            s.rawData = s.decode()
+            outputData.parentElement.hidden = false;
+            outputMessage.innerText = s.rawData.substring(0, 50);
+            var d = str2Droplet(s.rawData);
+            if (g) {
+                if (!g.isDone()) {
+                    g.addDroplet(d);
+                } else {
+                    break;
+                }
+            } else {
+                g = new Glass(d);
+            }
+            if (g.isDone()) {
+                outputData.innerText = '译码完成！';
+                const urlObject = window.URL || window.webkitURL || window;
+                const save_link = document.createElement('a');
+                const blob = new Blob([g.getData()],{
+                    type: 'application/octet-stream'
+                });
+                // 创建 Blob 对象
+                save_link.href = urlObject.createObjectURL(blob);
+                save_link.download = document.querySelector("#filename").value;
+                save_link.click();
+                break;
+            }
+            outputData.innerText = `已收到 ${g.droplets.length} 个包; 译码进度: ${g.chunksDone()}/${g.numChunks}`;
+        }
+        ;
+    } catch (error) {
+        console.log(error);
+    }
 }
 
 var prevTimestamp;
 
-async function fzbar(){
-	canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-	try {
-		symbols = await zbarWasm.scanImageData(imageData);
-		p_g(symbols);
-	} catch (error) {
-		console.log(error);
-	}
+async function fzbar() {
+    canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+    var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+    try {
+        symbols = await zbarWasm.scanImageData(imageData);
+        p_g(symbols);
+    } catch (error) {
+        console.log(error);
+    }
 }
 
 function tick(timestamp) {
-  setTimeout(()=>{requestAnimationFrame(tick);}, 200);
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-  	if (!prevTimestamp) prevTimestamp = timestamp;
-	const delta = timestamp - prevTimestamp;
-	
-	if(delta < 200){
-	  return delta;
-	}
-	prevTimestamp = timestamp;
-	fzbar();
-  }
+    setTimeout( () => {
+        requestAnimationFrame(tick);
+    }
+    , 200);
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (!prevTimestamp)
+            prevTimestamp = timestamp;
+        const delta = timestamp - prevTimestamp;
+
+        if (delta < 200) {
+            return delta;
+        }
+        prevTimestamp = timestamp;
+        fzbar();
+    }
 }
+
 </script>
 </body>
 
