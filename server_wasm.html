@@ -41,7 +41,7 @@ body {
 <body>
     <div class="app">
         <div class="bg"><img src="https://img.limour.top/2024/12/04/674fef77a1eb3.webp" alt=""></div>
-<a id="githubLink" href="https://hexo.limour.top/internal-network-uses-p4wnp1-to-transfer-file">View documentation v0.5</a>
+<a id="githubLink" href="https://hexo.limour.top/internal-network-uses-p4wnp1-to-transfer-file">View documentation v0.6</a>
 <br>
 <span>保存文件名：</span><textarea id="filename" rows="1" cols="50">qr.dl.txt</textarea>
 <hr>
@@ -358,22 +358,36 @@ navigator.mediaDevices.getUserMedia({
     loadingMessage.hidden = true;
     canvasElement.hidden = false;
     outputContainer.hidden = false;
+	outputData.parentElement.hidden = false;
     canvasElement.height = 512;
     canvasElement.width = 512;
     requestAnimationFrame(tick);
 });
 
+async function sleep(timeout) {
+    await new Promise((s)=>setTimeout(s, timeout * 1000));
+}
+
 var g;
 async function p_g(symbols) {
     try {
         for (const s of symbols) {
-            s.rawData = s.decode()
-            outputData.parentElement.hidden = false;
-            outputMessage.innerText = s.rawData.substring(0, 50);
+			outputMessage.innerText = '译码中, 请耐心等待...';
+			await sleep(0.1);
+            s.rawData = s.decode();
             var d = str2Droplet(s.rawData);
+			if (d.data.length != 512){
+				outputMessage.innerText = '错误包，已忽略';
+				break;
+			}
             if (g) {
                 if (!g.isDone()) {
+					if (d.padding != g.padding || d.numChunks != g.numChunks){
+						outputMessage.innerText = '错误包，已忽略';
+						break;
+					}
                     g.addDroplet(d);
+					outputMessage.innerText = s.rawData.substring(0, 50);
                 } else {
                     break;
                 }
