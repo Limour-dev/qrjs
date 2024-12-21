@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Base64 to File Converter</title>
+    <style>
+        body {
+            margin: 20px;
+            font-family: Arial, sans-serif;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Base64 to File Converter</h2>
+    <textarea id="base64Input" placeholder="Paste base64 encoded text here..."></textarea>
+    <button onclick="processBase64()">Convert and Download</button>
+
+    <script>
+        async function processBase64() {
+            try {
+                const base64Input = document.getElementById('base64Input').value.trim();
+                if (!base64Input) {
+                    alert('Please paste base64 encoded text first!');
+                    return;
+                }
+
+                // Convert base64 to byte array
+                const binaryString = atob(base64Input);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                // Create a blob from the byte array
+                const blob = new Blob([bytes]);
+
+                // Create a readable stream from the blob
+                const readableStream = blob.stream();
+
+				const decompressedStream = readableStream.pipeThrough(new DecompressionStream('gzip'));
+				const decompressedResponse = new Response(decompressedStream);
+				const decompressedBlob = await decompressedResponse.blob();
+				
+				const urlObject = window.URL || window.webkitURL || window;
+				const save_link = document.createElement('a');
+				save_link.href = urlObject.createObjectURL(decompressedBlob);
+				save_link.download = 'client.html';
+				save_link.click();
+
+            } catch (error) {
+                console.error('Error processing file:', error);
+                alert('Error processing file: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

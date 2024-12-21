@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no">
+  <title>qrjs by limour</title>
+ </head>
+ <style>
+  * {
+   padding: 0;
+   margin: 0;
+  }
+
+  body {
+   width: 100%;
+   height: 100%;
+   background: #FFFFFF;
+  }
+
+  .bg {
+   display: none;
+   position: fixed;
+   left: 0;
+   top: 0;
+   right: 0;
+   bottom: 0;
+   z-index: 10;
+   background: rgba(0, 0, 0, 0.9);
+   text-align: end;
+   overflow: hidden;
+   padding: 1rem 5px 0 1rem;
+  }
+
+  .bg img {
+   width: 93%;
+   height: auto;
+  }
+ </style>
+ <body>
+  <div class="app">
+   <div class="bg">
+    <img src="https://img.limour.top/2024/12/04/674fef77a1eb3.webp" alt="">
+   </div>
+   <a id="githubLink" href="https://hexo.limour.top/internal-network-uses-p4wnp1-to-transfer-file">View documentation v0.6</a>
+   <br>
+   <span>保存文件名：</span>
+   <textarea id="filename" rows="1" cols="50">qr.dl.txt</textarea>
+   <hr>
+   <div id="loadingMessage">🎥 Unable to access video stream (please make sure you have a webcam enabled)</div>
+   <canvas id="canvas" hidden></canvas>
+   <div id="output" hidden>
+    <span id="outputMessage">No QR code detected.</span>
+    <div hidden>
+     <b>Data:</b>
+     <span id="outputData"></span>
+    </div>
+   </div>
+  </div>
+  <script>
+   window.onload = function() {
+    if (IsWeixinOrAlipay() == 13) {
+     var bgElements = document.querySelectorAll(".bg");
+     bgElements.forEach(function(element) {
+      element.style.display = 'block';
+     });
+    } else {
+     console.log(IsWeixinOrAlipay());
+    }
+   }
+
+   function IsWeixinOrAlipay() {
+    var ua = window.navigator.userAgent.toLowerCase();
+    // 判断是不是微信
+    if (ua.match(/micromessenger/i) == 'micromessenger') {
+     return 13;
+    }
+    // 判断是不是支付宝
+    if (ua.match(/alipayclient/i) == 'alipayclient') {
+     return 12;
+    }
+    // 哪个都不是
+    return 0;
+   }
+  </script>
+  <script src="https://jscdn.limour.top/npm/@undecaf/zbar-wasm@0.11.0/dist/index.js"></script>
+  <script>
+   if (IsWeixinOrAlipay() == 13) {
+    throw SyntaxError('不要微信！');
+   }
+   function seededRandom(seed) {
+    let lSeed = seed || 1337;
+
+    return function rd(min=0, max=2147483647) {
+     const random = Math.sin(lSeed) * 100;
+     const seedDecimal = (random - Math.floor(random)).toFixed(8);
+     lSeed = (Math.floor(seedDecimal * 25214903917) + 11) % 2147483647;
+     return Math.floor(seedDecimal * (max - min + 1) + min);
+    }
+   }
+
+   function robustSolition(K) {
+    // 理想孤波分布
+    const pIdeal = new Array(K).fill(0);
+    pIdeal[0] = 1 / K;
+    for (let i = 1; i < K; i++) {
+     pIdeal[i] = 1 / (i * (i + 1));
+    }
+
+    // 鲁棒孤波分布
+    const c = 0.05;
+    const delta = 0.05;
+    const pRobust = [...pIdeal];
+
+    const R = c * Math.log(K / delta) * Math.sqrt(K);
+    const degreeMax = Math.min(Math.max(Math.round(K / R), 2), K);
+    // console.log('预处理集期望大小', R, '度数上限', degreeMax);
+    const p = new Array(degreeMax).fill(0);
+
+    for (let i = 0; i < degreeMax - 1; i++) {
+     p[i] = R / ((i + 1) * K);
+    }
+
+    p[degreeMax - 1] = R * Math.log(R / delta) / K;
+
+    for (let i = 0; i < degreeMax; i++) {
+     pRobust[i] += p[i];
+    }
+
+    const sumPRobust = pRobust.reduce( (a, b) => a + b, 0);
+    const normalizedPRobust = pRobust.map(x => x / sumPRobust);
+
+    const maxNum = normalizedPRobust.length - normalizedPRobust.reverse().findIndex(x => x > (0.1 / K));
+    normalizedPRobust.reverse();
+
+    const distributionMatrixProb = normalizedPRobust.slice(0, maxNum);
+    const tempSum = distributionMatrixProb.reduce( (a, b) => a + b, 0);
+    let cumSum = 0;
+    return distributionMatrixProb.map(x => {
+     cumSum += (x / tempSum);
+     return cumSum.toFixed(8);
+    }
+    );
+   }
+
+   function randChunkNums(k, prob, seed) {
+    const r = seededRandom(seed);
+    const d = (r(0, 2147483646) / 2147483647).toFixed(8);
+    const degree = prob.findIndex(x => x >= d) + 1;
+    k -= 1;
+    const res = new Set();
+    while (res.size < degree) {
+     res.add(r(0, k));
+    }
+    return Array.from(res).sort( (a, b) => a - b);
+   }
+
+   function xor(arr1, arr2) {
+    return new Uint8Array(arr1.map( (byte, i) => byte ^ arr2[i]));
+   }
+
+   class Droplet {
+    constructor(data, seed, numChunks, padding) {
+     this.data = data;
+     this.seed = seed;
+     this.numChunks = numChunks;
+     this.padding = padding;
+    }
+
+    chunkNums() {
+     return randChunkNums(this.numChunks, this.prob, this.seed);
+    }
+
+    getStr() {
+     const data = btoa(String.fromCharCode.apply(null, new Uint8Array(this.data)));
+     return `${this.seed}|${this.numChunks}|${this.padding}|${data}`;
+    }
+
+   }
+
+   function str2Droplet(s) {
+    // 使用split分割字符串，不限制分割次数
+    let args = s.split('|');
+    let seed = parseInt(args[0], 10);
+    let num_chunks = parseInt(args[1], 10);
+    let padding = parseInt(args[2], 10);
+    // 将第四个及之后的所有部分合并到一起
+    let data = args.slice(3).join('|');
+    // 使用atob解码base64字符串，并将其转换为Uint8Array
+    let decodedData = atob(data);
+    let dataArray = new Uint8Array(decodedData.length);
+    for (let i = 0; i < decodedData.length; i++) {
+     dataArray[i] = decodedData.charCodeAt(i);
+    }
+    return new Droplet(dataArray,seed,num_chunks,padding);
+   }
+
+   class Fountain {
+    constructor(data, chunkSize=32, seed=null) {
+     this.data = new Uint8Array(data);
+     this.chunkSize = chunkSize;
+     this.numChunks = Math.ceil(data.length / chunkSize);
+     this.seed = seed;
+     this.r = seededRandom(seed);
+     this.prob = robustSolition(this.numChunks);
+     this.padding = this.numChunks * this.chunkSize - data.length;
+
+     // Add padding
+     const paddedData = new Uint8Array(this.numChunks * this.chunkSize);
+     paddedData.set(this.data);
+     this.data = paddedData;
+    }
+
+    droplet() {
+     this.updateSeed();
+     if (this.numChunks > 1) {
+      const chunkNums = randChunkNums(this.numChunks, this.prob, this.seed);
+      var data = null;
+      for (const num of chunkNums) {
+       if (data === null) {
+        data = this.chunk(num);
+       } else {
+        data = xor(data, this.chunk(num));
+       }
+      }
+     } else {
+      var data = this.data;
+     }
+     return new Droplet(data,this.seed,this.numChunks,this.padding);
+    }
+
+    chunk(num) {
+     const start = this.chunkSize * num;
+     const end = this.chunkSize * (num + 1);
+     return this.data.slice(start, end);
+    }
+
+    updateSeed() {
+     this.seed = this.r();
+    }
+   }
+
+   class Glass {
+    constructor(d) {
+     this.entries = [];
+     this.droplets = [];
+     this.numChunks = d.numChunks;
+     this.chunks = new Array(this.numChunks).fill(null);
+     this.prob = robustSolition(this.numChunks);
+     this.padding = d.padding;
+     this.addDroplet(d);
+    }
+
+    addDroplet(d) {
+     if (this.numChunks > 1) {
+      for (let od of this.droplets) {
+       if (od.seed === d.seed) {
+        outputMessage.innerText = '重复包，已忽略';
+        return;
+       }
+      }
+      d.prob = this.prob;
+      this.droplets.push(d);
+      const entry = [d.chunkNums(), d.data];
+      this.entries.push(entry);
+      this.updateEntry(entry);
+     } else {
+      this.chunks[0] = d.data;
+     }
+
+    }
+
+    updateEntry(entry) {
+     for (const chunkNum of [...entry[0]]) {
+      if (this.chunks[chunkNum] !== null) {
+       entry[1] = xor(entry[1], this.chunks[chunkNum]);
+       entry[0].splice(entry[0].indexOf(chunkNum), 1);
+      }
+     }
+     if (entry[0].length === 1) {
+      this.chunks[entry[0][0]] = entry[1];
+      this.entries.splice(this.entries.indexOf(entry), 1);
+      for (const d of this.entries) {
+       if (d[0].includes(entry[0][0])) {
+        this.updateEntry(d);
+       }
+      }
+     }
+    }
+
+    getData() {
+     if (this.isDone()) {
+      const lastChunk = this.chunks[this.chunks.length - 1];
+      this.chunks[this.chunks.length - 1] = lastChunk.slice(0, lastChunk.length - this.padding);
+      return new Uint8Array(this.chunks.reduce( (acc, chunk) => {
+       acc.push(...chunk);
+       return acc;
+      }
+      , []));
+     }
+     return new Uint8Array(0);
+    }
+
+    isDone() {
+     return !this.chunks.includes(null);
+    }
+
+    chunksDone() {
+     return this.chunks.filter(x => x !== null).length;
+    }
+   }
+   var limour = prompt('请输入保存的文件名', 'qr.dl.txt');
+   if (limour) {
+    document.querySelector("#filename").value = limour;
+   }
+   var video = document.createElement("video");
+   var canvasElement = document.getElementById("canvas");
+   var canvas = canvasElement.getContext("2d", {
+    willReadFrequently: true
+   });
+   var loadingMessage = document.getElementById("loadingMessage");
+   var outputContainer = document.getElementById("output");
+   var outputMessage = document.getElementById("outputMessage");
+   var outputData = document.getElementById("outputData");
+
+   function drawLine(begin, end, color) {
+    canvas.beginPath();
+    canvas.moveTo(begin.x, begin.y);
+    canvas.lineTo(end.x, end.y);
+    canvas.lineWidth = 4;
+    canvas.strokeStyle = color;
+    canvas.stroke();
+   }
+
+   video.hidden = true
+   video.height = 512;
+   video.width = 512;
+   // Use facingMode: environment to attemt to get the front camera on phones
+   navigator.mediaDevices.getUserMedia({
+    video: {
+     facingMode: "environment",
+     focusMode: "continuous",
+     // 持续自动对焦
+     exposureMode: "continuous",
+     // 持续自动曝光
+     width: {
+      ideal: 512
+     },
+     height: {
+      ideal: 512
+     },
+     frameRate: {
+      ideal: 6
+     },
+    }
+   }).then(function(stream) {
+    video.srcObject = stream;
+    video.setAttribute("playsinline", true);
+    // required to tell iOS safari we don't want fullscreen
+    video.play();
+    loadingMessage.innerText = "⌛ Loading video..."
+    loadingMessage.hidden = true;
+    canvasElement.hidden = false;
+    outputContainer.hidden = false;
+    outputData.parentElement.hidden = false;
+    canvasElement.height = 512;
+    canvasElement.width = 512;
+    requestAnimationFrame(tick);
+   });
+
+   async function sleep(timeout) {
+    await new Promise( (s) => setTimeout(s, timeout * 1000));
+   }
+
+   var g;
+   async function p_g(symbols) {
+    try {
+     for (const s of symbols) {
+      outputMessage.innerText = '译码中, 请耐心等待...';
+      await sleep(0.1);
+      s.rawData = s.decode();
+      var d = str2Droplet(s.rawData);
+      if (d.data.length != 512) {
+       outputMessage.innerText = '错误包，已忽略';
+       break;
+      }
+      if (g) {
+       if (!g.isDone()) {
+        if (d.padding != g.padding || d.numChunks != g.numChunks) {
+         outputMessage.innerText = '错误包，已忽略';
+         break;
+        }
+        g.addDroplet(d);
+        outputMessage.innerText = s.rawData.substring(0, 50);
+       } else {
+        break;
+       }
+      } else {
+       g = new Glass(d);
+      }
+      if (g.isDone()) {
+       outputData.innerText = '译码完成！';
+       const urlObject = window.URL || window.webkitURL || window;
+       const save_link = document.createElement('a');
+       const blob = new Blob([g.getData()],{
+        type: 'application/octet-stream'
+       });
+       // 创建 Blob 对象
+       save_link.href = urlObject.createObjectURL(blob);
+       save_link.download = document.querySelector("#filename").value;
+       save_link.click();
+       break;
+      }
+      outputData.innerText = `已收到 ${g.droplets.length} 个包; 译码进度: ${g.chunksDone()}/${g.numChunks}`;
+     }
+     ;
+    } catch (error) {
+     console.log(error);
+    }
+   }
+
+   var prevTimestamp;
+
+   async function fzbar() {
+    canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+    var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+    try {
+     var symbols = await zbarWasm.scanImageData(imageData);
+     p_g(symbols);
+    } catch (error) {
+     console.log(error);
+    }
+   }
+
+   function tick(timestamp) {
+    setTimeout( () => {
+     requestAnimationFrame(tick);
+    }
+    , 200);
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+     if (!prevTimestamp)
+      prevTimestamp = timestamp;
+     const delta = timestamp - prevTimestamp;
+
+     if (delta < 200) {
+      return delta;
+     }
+     prevTimestamp = timestamp;
+     fzbar();
+    }
+   }
+  </script>
+ </body>
+</html>

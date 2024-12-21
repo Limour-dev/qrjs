@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>File Compressor</title>
+</head>
+<body>
+  <input type="file" id="fileInput" onchange="compressAndEncodeFile(event)">
+  <textarea id="output" rows="10" cols="50"></textarea>
+  <button onclick="copyToClipboard()">Copy to Clipboard</button>
+  
+  <script>
+    async function compressAndEncodeFile(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        return;
+      }
+      const reader = file.stream().pipeThrough(new CompressionStream('gzip'));
+      const chunks = [];
+      const readerStream = reader.getReader();
+      while (true) {
+        const { done, value } = await readerStream.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const compressedFile = new Blob(chunks, { type: 'application/gzip' });
+      const reader2 = new FileReader();
+      reader2.onload = function() {
+        var base64Data = reader2.result.slice(29);
+		base64Data = atob('bGF5b3V0KCd1cycpOwp0eXBpbmdTcGVlZCg1MCwxMDApOwogCnByZXNzKCJHVUkgciIpOwpkZWxheSg1MDApOwp0eXBlKCJub3RlcGFkXG4iKTsgCmRlbGF5KDE1MDApOyAKCnR5cGluZ1NwZWVkKDIwLDUpOwp2YXIgbGltb3VyX3FyanMgPSAn') + base64Data;
+		base64Data = base64Data + atob('JzsKZm9yICh2YXIgaSA9IDA7IGkgPCBsaW1vdXJfcXJqcy5sZW5ndGg7IGkgKz0gMTI4KSB7CiAgICB0eXBlKGxpbW91cl9xcmpzLnNsaWNlKGksIGkrMTI4KSk7CiAgICBkZWxheSgxMDApOwp9Cg==');
+        document.getElementById('output').value = base64Data;
+      };
+      reader2.readAsDataURL(compressedFile);
+    }
+
+    function copyToClipboard() {
+      const output = document.getElementById('output');
+      output.select();
+      document.execCommand('copy');
+      alert('Copied to clipboard!');
+    }
+  </script>
+</body>
+</html>
